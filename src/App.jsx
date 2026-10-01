@@ -100,7 +100,7 @@ export default function App() {
   const [regPassword, setRegPassword] = useState('');
 
   // Base URL de tu API backend
-  const API_URL = 'http://127.0.0.1:8000/api';
+  const API_URL = 'http://localhost:8000/api/v1/auth';
 
   // 1. Verificar si ya existe un token en localStorage al cargar la página
   useEffect(() => {
@@ -119,20 +119,20 @@ export default function App() {
       const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
-          correo: loginEmail,
-          contrasena: loginPassword
+          email: loginEmail,       // Corregido: 'email' en lugar de 'correo'
+          password: loginPassword  // Corregido: 'password' en lugar de 'contrasena'
         })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Guarda credenciales devueltas por el Backend
         localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user || { correo: loginEmail }));
+        localStorage.setItem('user', JSON.stringify(data.user));
         setIsAuthenticated(true);
       } else {
         alert(data.message || 'Credenciales incorrectas');
@@ -154,21 +154,28 @@ export default function App() {
       const response = await fetch(`${API_URL}/register`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
-          nombre: regName,
-          correo: regEmail,
-          telefono: regPhone,
-          contrasena: regPassword
+          name: regName,           
+          email: regEmail,         
+          phone: regPhone,         
+          password: regPassword,   
+          role: 'buyer'            
         })
       });
 
       const data = await response.json();
 
-      if (response.ok) {
-        alert('Registro exitoso. ¡Ahora puedes iniciar sesión!');
+      if (response.status === 201) {
+        alert('Registro exitoso. Ahora puedes iniciar sesión.');
         setCurrentView('login');
+      } else if (response.status === 409) {
+        alert(data.message || 'El correo electrónico ya se encuentra registrado.');
+      } else if (response.status === 422) {
+        const errorMsg = data.errors ? Object.values(data.errors).flat().join('\n') : data.message;
+        alert(errorMsg);
       } else {
         alert(data.message || 'Ocurrió un error durante el registro');
       }
