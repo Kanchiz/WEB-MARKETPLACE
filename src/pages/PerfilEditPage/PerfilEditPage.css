@@ -1,0 +1,106 @@
+/* ===== Wrapper de página ===== */
+.perfil-page-wrapper {
+  min-height: 100vh;
+  background-color: #f8fafc;
+  padding: 32px;
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+}
+
+/* ===== Contenedor del formulario ===== */
+.perfil-container {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #fff;
+  padding: 32px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+/* ===== Botón volver ===== */
+.perfil-btn-back {
+  background: none;
+  border: none;
+  color: #1d61e7;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 16px;
+  font-size: 14px;
+  padding: 0;
+  font-family: inherit;
+}
+
+.perfil-btn-back:hover {
+  text-decoration: underline;
+}
+
+/* ===== Encabezado ===== */
+.perfil-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.perfil-subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+/* ===== Formulario ===== */
+.perfil-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.perfil-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.perfil-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 14px;
+  box-sizing: border-box;
+  outline: none;
+  font-family: inherit;
+  background-color: #fff;
+}
+
+.perfil-input:focus {
+  border-color: #1d61e7;
+  box-shadow: 0 0 0 3px rgba(29, 97, 231, 0.1);
+}
+
+/* ===== Botón guardar ===== */
+.perfil-btn-submit {
+  width: 100%;
+  padding: 12px;
+  background-color: #1d61e7;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  font-family: inherit;
+  transition: background-color 0.2s;
+}
+
+.perfil-btn-submit:hover:not(:disabled) {
+  background-color: #1e40af;
+}
+
+.perfil-btn-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
