@@ -1,0 +1,256 @@
+.detail-page-wrapper {
+  min-height: 100vh;
+  background-color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+}
+
+.detail-header {
+  background-color: #1d61e7;
+  color: #fff;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.btn-logout {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.detail-main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.btn-back-detail {
+  background: none;
+  border: none;
+  color: #1d61e7;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 24px;
+  font-size: 15px;
+}
+
+.product-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.product-image-section img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+}
+
+.product-category {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d61e7;
+  text-transform: uppercase;
+}
+
+.product-title {
+  font-size: 28px;
+  color: #0f172a;
+  margin: 8px 0;
+}
+
+.product-price {
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 16px 0;
+}
+
+.product-location {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.product-description-box {
+  margin: 24px 0;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.product-description-box h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.product-description-box p {
+  color: #334155;
+  line-height: 1.6;
+}
+
+.seller-card {
+  background-color: #f8fafc;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-contact-seller {
+  width: 100%;
+  background-color: #1d61e7;
+  color: #fff;
+  border: none;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: background 0.2s;
+}
+
+.btn-contact-seller:hover {
+  background-color: #1e40af;
+}
+
+/* ================================= */
+/* ESTILOS DEL CHAT FLOTANTE         */
+/* ================================= */
+
+.chat-widget {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 340px;
+  height: 450px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+  border: 1px solid #cbd5e1;
+}
+
+.chat-header {
+  background: #1d61e7;
+  color: white;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-status {
+  display: block;
+  font-size: 11px;
+  color: #bfdbfe;
+  margin-top: 2px;
+}
+
+.btn-close-chat {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.chat-body {
+  flex: 1;
+  padding: 16px;
+  background: #f1f5f9;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-message {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.my-message {
+  background: #1d61e7;
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.seller-message {
+  background: #fff;
+  color: #334155;
+  align-self: flex-start;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 4px;
+}
+
+.typing-indicator {
+  font-style: italic;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.chat-footer {
+  display: flex;
+  padding: 12px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  outline: none;
+  font-size: 14px;
+}
+
+.btn-send-chat {
+  background: #1d61e7;
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-left: 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 16px;
+}
