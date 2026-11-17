@@ -22,10 +22,19 @@ export default function AuthPage({ onLoginSuccess }) {
   const [newPassword, setNewPassword] = useState('');
   const [stepForgot, setStepForgot] = useState(1);
 
-  const API_URL = 'http://127.0.0.1:8000/api';
+  const API_URL = 'http://localhost:8000/api';
 
   const isValidGmail = (email) => email.trim().toLowerCase().endsWith('@gmail.com');
   const isValidPasswordLength = (pass) => pass.length >= 8 && pass.length <= 16;
+
+  const guardarSesion = (data, fallbackEmail = '') => {
+    const token = data.token || data.access_token || data.data?.token;
+    if (token) {
+      localStorage.setItem('token', token);
+    }
+    const user = data.user || data.data?.user || { correo: fallbackEmail };
+    localStorage.setItem('user', JSON.stringify(user));
+  };
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -47,8 +56,7 @@ export default function AuthPage({ onLoginSuccess }) {
       });
       const data = await response.json();
       if (response.ok) {
-        if (data.token) localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user || { correo: loginEmail }));
+        guardarSesion(data, loginEmail);
         onLoginSuccess();
       } else {
         const firstError = data.errors ? Object.values(data.errors)[0][0] : null;
@@ -150,8 +158,7 @@ export default function AuthPage({ onLoginSuccess }) {
       });
       const data = await response.json();
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        guardarSesion(data);
         onLoginSuccess();
       } else {
         alert(data.message || 'Error en la autenticación con Google.');

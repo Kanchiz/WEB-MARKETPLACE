@@ -1,30 +1,58 @@
-import { useState } from 'react';
-import './ArticuloDetailPage.css'; // Asegúrate de tener este archivo para los estilos del chat flotante
+import { useState, useEffect } from 'react';
+import './ArticuloDetailPage.css';
+import ChatModal from '../../components/ChatModal';
 
 export default function ArticuloDetailPage({ articulo, onBack, onLogout }) {
-  // --- ESTADOS ORIGINALES ---
   const [selectedImg, setSelectedImg] = useState(articulo.imagenes[0]);
   const [comentarios, setComentarios] = useState(articulo.comentarios || []);
   const [nuevoComentario, setNuevoComentario] = useState('');
 
-  const user = JSON.parse(localStorage.getItem('user')) || { nombre: 'Usuario Mercado' };
-
-  // --- ESTADOS DEL CHAT (NUEVO) ---
+  // Estados para el chat en tiempo real (comprador y vendedor)
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [mensajeInput, setMensajeInput] = useState('');
-  const [mensajes, setMensajes] = useState([
-    { id: 1, texto: `Hola, me interesa tu anuncio de "${articulo.titulo}".`, emisor: 'yo' }
-  ]);
-  const [isTyping, setIsTyping] = useState(false);
+  const [activeReceiverId, setActiveReceiverId] = useState(null);
+  const [activeReceiverName, setActiveReceiverName] = useState('');
+  const [buyersList, setBuyersList] = useState([]);
+  const [loadingChats, setLoadingChats] = useState(false);
 
-  // --- FUNCIONES ORIGINALES ---
+  const user = JSON.parse(localStorage.getItem('user')) || null;
+  const sellerId = articulo.sellerId || articulo.vendedor?.id;
+  const esMiProducto = Boolean(user?.id && sellerId && Number(user.id) === Number(sellerId));
+
+  // Si el usuario actual es el vendedor, cargar la lista de compradores que le han escrito
+  useEffect(() => {
+    if (!esMiProducto || !articulo.id) return;
+
+    const fetchConversations = async () => {
+      setLoadingChats(true);
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/products/${articulo.id}/conversations`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBuyersList(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Error cargando conversaciones del vendedor:', err);
+      } finally {
+        setLoadingChats(false);
+      }
+    };
+
+    fetchConversations();
+  }, [esMiProducto, articulo.id]);
+
   const handleAddComment = (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
 
     const comentarioObj = {
       id: Date.now(),
-      autor: user.nombre || user.name || 'Usuario',
+      autor: user?.nombre || user?.name || 'Usuario',
       texto: nuevoComentario.trim()
     };
 
@@ -32,27 +60,26 @@ export default function ArticuloDetailPage({ articulo, onBack, onLogout }) {
     setNuevoComentario('');
   };
 
-  // --- FUNCIÓN DEL CHAT (NUEVO) ---
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!mensajeInput.trim()) return;
+  // Abrir chat cuando el usuario es comprador
+  const handleOpenBuyerChat = () => {
+    if (!user?.id) {
+      alert('Debes iniciar sesión para chatear con el vendedor.');
+      return;
+    }
+    if (!sellerId) {
+      alert('Este es un artículo de demostración. El chat en tiempo real está disponible en artículos publicados en la plataforma.');
+      return;
+    }
+    setActiveReceiverId(sellerId);
+    setActiveReceiverName(articulo.vendedor?.nombreCompleto || 'Vendedor');
+    setIsChatOpen(true);
+  };
 
-    // Agregar mi mensaje
-    const nuevoMensaje = { id: Date.now(), texto: mensajeInput, emisor: 'yo' };
-    setMensajes(prev => [...prev, nuevoMensaje]);
-    setMensajeInput('');
-    setIsTyping(true);
-
-    // Simular la respuesta del vendedor después de 1.5 segundos
-    setTimeout(() => {
-      const respuestaVendedor = { 
-        id: Date.now() + 1, 
-        texto: '¡Hola! Claro, sigue disponible. ¿De qué parte eres para acordar entrega?', 
-        emisor: 'vendedor' 
-      };
-      setMensajes(prev => [...prev, respuestaVendedor]);
-      setIsTyping(false);
-    }, 1500);
+  // Abrir chat cuando el usuario es el vendedor y selecciona a un comprador
+  const handleOpenSellerReply = (buyer) => {
+    setActiveReceiverId(buyer.id);
+    setActiveReceiverName(buyer.name);
+    setIsChatOpen(true);
   };
 
   return (
@@ -105,13 +132,50 @@ export default function ArticuloDetailPage({ articulo, onBack, onLogout }) {
               </div>
             </div>
 
-            {/* EVENTO ONCLICK AGREGADO AQUÍ */}
-            <button 
-              onClick={() => setIsChatOpen(true)}
-              style={{ width: '100%', padding: '14px', backgroundColor: '#1d61e7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}
-            >
-              Enviar mensaje al vendedor
-            </button>
+            {/* ZONA DE ACCIÓN DE CHAT (COMPRADOR VS VENDEDOR) */}
+            {!esMiProducto ? (
+              <button
+                onClick={handleOpenBuyerChat}
+                style={{ width: '100%', padding: '14px', backgroundColor: '#1d61e7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                💬 Enviar mensaje al vendedor
+              </button>
+            ) : (
+              <div style={{ padding: '14px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <span style={{ color: '#1e40af', fontSize: '13px', fontWeight: '700' }}>
+                  📢 Publicado por ti — Mensajes de interesados:
+                </span>
+
+                {loadingChats ? (
+                  <span style={{ fontSize: '13px', color: '#475569' }}>Cargando chats...</span>
+                ) : buyersList.length > 0 ? (
+                  buyersList.map((buyer) => (
+                    <button
+                      key={buyer.id}
+                      onClick={() => handleOpenSellerReply(buyer)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        backgroundColor: '#1d61e7',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                    >
+                      💬 Responder a {buyer.name}
+                    </button>
+                  ))
+                ) : (
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>
+                    Aún no has recibido mensajes por este artículo.
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -146,41 +210,15 @@ export default function ArticuloDetailPage({ articulo, onBack, onLogout }) {
         </div>
       </div>
 
-      {/* VENTANA FLOTANTE DE CHAT (NUEVO) */}
-      {isChatOpen && (
-        <div className="chat-widget">
-          <div className="chat-header">
-            <div>
-              <strong>{articulo.vendedor.nombreCompleto}</strong>
-              <span className="chat-status">En línea</span>
-            </div>
-            <button onClick={() => setIsChatOpen(false)} className="btn-close-chat">✖</button>
-          </div>
-
-          <div className="chat-body">
-            {mensajes.map((msg) => (
-              <div key={msg.id} className={`chat-message ${msg.emisor === 'yo' ? 'my-message' : 'seller-message'}`}>
-                {msg.texto}
-              </div>
-            ))}
-            {isTyping && (
-              <div className="chat-message seller-message typing-indicator">
-                El vendedor está escribiendo...
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleSendMessage} className="chat-footer">
-            <input 
-              type="text" 
-              placeholder="Escribe un mensaje..." 
-              value={mensajeInput}
-              onChange={(e) => setMensajeInput(e.target.value)}
-              className="chat-input"
-            />
-            <button type="submit" className="btn-send-chat">➤</button>
-          </form>
-        </div>
+      {/* MODAL DE CHAT EN TIEMPO REAL CON SOCKET.IO */}
+      {isChatOpen && user && activeReceiverId && (
+        <ChatModal
+          product={articulo}
+          currentUser={user}
+          receiverId={activeReceiverId}
+          receiverName={activeReceiverName}
+          onClose={() => setIsChatOpen(false)}
+        />
       )}
     </div>
   );
