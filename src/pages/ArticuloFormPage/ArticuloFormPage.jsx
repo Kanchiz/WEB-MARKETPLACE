@@ -1,20 +1,82 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './ArticuloFormPage.css';
+import LocationModal from '../../components/LocationModal';
+
+// Mapeo de nombres de categoría a sus IDs en la base de datos
+const CATEGORIAS_MAP = {
+  'Electrónica': 1,
+  'Muebles': 2,
+  'Deportes': 3,
+  'Juegos': 4,
+};
 
 export default function ArticuloFormPage({ onBack, onArticuloCreado }) {
   const [titulo, setTitulo] = useState('');
   const [precio, setPrecio] = useState('');
   const [categoria, setCategoria] = useState('Electrónica');
-  const [ubicacion, setUbicacion] = useState('Culiacán');
+
+  // Estado de ubicación con coordenadas para PostgreSQL
+  const [locationData, setLocationData] = useState({
+    city: 'Culiacán',
+    coords: [24.8091, -107.3940],
+    radiusKm: 5,
+  });
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+
+  const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user')) || { nombre: 'Usuario Actual' };
 
-  // Convierte el archivo de imagen seleccionado o arrastrado a Base64
+  // Detectar ubicación GPS inicial del vendedor si da permiso
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+            { headers: { 'User-Agent': 'MarketplaceEquipo6/1.0' } }
+          );
+          const data = await res.json();
+          const address = data.address || {};
+          const ciudad =
+            address.city ||
+            address.town ||
+            address.village ||
+            address.municipality ||
+            'Culiacán';
+
+          setLocationData((prev) => ({
+            ...prev,
+            city: ciudad,
+            coords: [lat, lng],
+          }));
+        } catch {
+          setLocationData((prev) => ({
+            ...prev,
+            coords: [lat, lng],
+          }));
+        }
+      },
+      () => {
+        // Si no permite GPS, mantiene Culiacán por defecto
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, []);
+
+  // Guarda el archivo real para enviarlo al backend y genera la vista previa local
   const handleImageFile = (file) => {
     if (file && file.type.startsWith('image/')) {
+      setImagenFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagenPreview(reader.result);
@@ -46,37 +108,81 @@ export default function ArticuloFormPage({ onBack, onArticuloCreado }) {
     setIsDraggingOver(false);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    // Imagen por defecto si el usuario no adjunta ninguna
-    const imagenFinal = imagenPreview || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f';
+    // Recuperar el token guardado al iniciar sesión
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
 
-    const nuevoArticulo = {
-      id: Date.now(),
-      titulo,
-      precio: `$${precio} MXN`,
-      categoria,
-      ubicacion,
-      descripcion,
-      imagenes: [imagenFinal],
-      vendedor: {
-        nombreCompleto: user.nombre || user.name || 'Usuario Actual',
-        calificacion: '5.0 ⭐',
-        miembrosDesde: '2026'
-      },
-      comentarios: []
-    };
+    if (!token) {
+      alert('Debes iniciar sesión para poder publicar un artículo.');
+      setIsSubmitting(false);
+      return;
+    }
 
-    // Obtener artículos previos del localStorage o iniciar con arreglo vacío
-    const storedArticulos = JSON.parse(localStorage.getItem('mis_articulos')) || [];
+    // Construir FormData con los nombres de columna que espera Laravel
+    const formData = new FormData();
+    formData.append('title', titulo);
+    formData.append('price', parseFloat(precio) || 0);
+    formData.append('category_id', CATEGORIAS_MAP[categoria] || 1);
+    formData.append('location', locationData.city);
+    formData.append('latitude', locationData.coords[0]);
+    formData.append('longitude', locationData.coords[1]);
+    formData.append('description', descripcion);
+    formData.append('condition', 'Usado');
 
-    // Guardar el nuevo artículo sumado a los anteriores
-    localStorage.setItem('mis_articulos', JSON.stringify([nuevoArticulo, ...storedArticulos]));
+    if (imagenFile) {
+      formData.append('image', imagenFile);
+    }
 
-    alert('¡Artículo publicado con éxito!');
-    if (onArticuloCreado) onArticuloCreado(nuevoArticulo);
-    onBack();
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/products', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Error al guardar en API:', data);
+        alert('Error al publicar: ' + (data.message || 'Verifica los datos ingresados.'));
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Formatear respuesta para actualizar la vista en memoria si el componente padre la usa
+      const articuloFormateado = {
+        id: data.id,
+        sellerId: data.seller_id || user.id,
+        titulo: data.title,
+        precio: `$${Number(data.price).toLocaleString('es-MX')} MXN`,
+        categoria,
+        ubicacion: data.location,
+        descripcion: data.description,
+        imagenes: [data.image_data || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f'],
+        vendedor: {
+          id: data.seller_id || user.id,
+          nombreCompleto: user.nombre || user.name || 'Usuario Actual',
+          calificacion: '5.0 ⭐',
+          miembrosDesde: '2026',
+        },
+        comentarios: [],
+      };
+
+      alert('¡Artículo publicado y guardado en la base de datos!');
+      if (onArticuloCreado) onArticuloCreado(articuloFormateado);
+      onBack();
+    } catch (error) {
+      console.error('Error de red:', error);
+      alert('No se pudo conectar con el servidor de la API.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -104,7 +210,8 @@ export default function ArticuloFormPage({ onBack, onArticuloCreado }) {
             <div>
               <label className="input-label">Precio (MXN)</label>
               <input
-                type="text"
+                type="number"
+                step="0.01"
                 placeholder="Ej. 2000"
                 value={precio}
                 onChange={(e) => setPrecio(e.target.value)}
@@ -129,14 +236,31 @@ export default function ArticuloFormPage({ onBack, onArticuloCreado }) {
 
           <div>
             <label className="input-label">Ubicación / Zona</label>
-            <input
-              type="text"
-              placeholder="Ej. Culiacán"
-              value={ubicacion}
-              onChange={(e) => setUbicacion(e.target.value)}
-              required
+            <button
+              type="button"
+              onClick={() => setIsLocationModalOpen(true)}
               className="input-field"
-            />
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                textAlign: 'left',
+                cursor: 'pointer',
+                backgroundColor: '#f8fafc',
+                color: '#0f172a',
+                fontWeight: '600',
+              }}
+            >
+              <span>
+                📍 {locationData.city}{' '}
+                <small style={{ color: '#64748b', fontWeight: '400' }}>
+                  ({locationData.coords[0].toFixed(4)}, {locationData.coords[1].toFixed(4)})
+                </small>
+              </span>
+              <span style={{ color: '#1d61e7', fontSize: '13px', fontWeight: '700' }}>
+                Elegir en mapa
+              </span>
+            </button>
           </div>
 
           {/* Zona de Arrastrar y Soltar / Explorador de Archivos */}
@@ -183,9 +307,19 @@ export default function ArticuloFormPage({ onBack, onArticuloCreado }) {
             ></textarea>
           </div>
 
-          <button type="submit" className="btn-submit">Publicar Artículo</button>
+          <button type="submit" className="btn-submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Publicando...' : 'Publicar Artículo'}
+          </button>
         </form>
       </div>
+
+      {/* Modal interactivo para seleccionar la ubicación del producto */}
+      <LocationModal
+        isOpen={isLocationModalOpen}
+        initialLocation={locationData}
+        onClose={() => setIsLocationModalOpen(false)}
+        onApply={(newLocation) => setLocationData(newLocation)}
+      />
     </div>
   );
 }
