@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './ArticulosSearchPage.css';
+import LocationModal from '../../components/LocationModal';
 
 // Importación de todas las imágenes locales desde assets (para datos de ejemplo)
 import biciImg from '../../assets/bicicleta.jpg';
@@ -116,11 +117,15 @@ const normalizarTexto = (texto = '') =>
 export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenForm, onOpenProfile }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('todos');
-  const [userLocationText, setUserLocationText] = useState('Obteniendo ubicación...');
-  const [locationError, setLocationError] = useState('');
 
-  const [customCity, setCustomCity] = useState('');
-  const [isChangingLocation, setIsChangingLocation] = useState(false);
+  // Filtro de ubicación con radio en km (por defecto Culiacán, 40 km)
+  const [locationFilter, setLocationFilter] = useState({
+    city: 'Culiacán',
+    coords: [24.8091, -107.3940],
+    radiusKm: 40,
+  });
+  const [usarFiltroDistancia, setUsarFiltroDistancia] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   // Estado para los artículos traídos desde PostgreSQL
   const [articulosApi, setArticulosApi] = useState([]);
@@ -135,61 +140,71 @@ export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenF
 
   const user = JSON.parse(localStorage.getItem('user')) || { nombre: 'Usuario Mercado' };
 
-  // 1. Cargar productos reales desde la API de Laravel
-  useEffect(() => {
-    const fetchProductos = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/v1/products', {
-          headers: {
-            'Accept': 'application/json',
-          },
+  // Función reutilizable para consultar productos desde la API (con o sin radio)
+  const fetchProductos = async (loc = locationFilter, filtrarPorRadio = usarFiltroDistancia) => {
+    setCargandoProductos(true);
+    try {
+      let url = 'http://localhost:8000/api/v1/products';
+
+      if (filtrarPorRadio && loc?.coords) {
+        const params = new URLSearchParams({
+          lat: loc.coords[0],
+          lng: loc.coords[1],
+          radius: loc.radiusKm,
         });
-
-        if (!response.ok) {
-          throw new Error('Error al obtener productos de la API');
-        }
-
-        const data = await response.json();
-
-        // Mapear los campos de PostgreSQL al formato que usan tus tarjetas y ArticuloDetailPage
-        const mapeados = data.map((prod) => ({
-          id: prod.id,
-          sellerId: prod.seller_id || prod.user_id || prod.seller?.id,
-          titulo: prod.title,
-          precio: `$${Number(prod.price).toLocaleString('es-MX')} MXN`,
-          categoria: prod.category?.name || 'General',
-          ubicacion: prod.location || 'Culiacán',
-          descripcion: prod.description || 'Sin descripción disponible.',
-          imagenes: [
-            prod.image_data || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f'
-          ],
-          vendedor: {
-            id: prod.seller_id || prod.user_id || prod.seller?.id,
-            nombreCompleto: prod.seller?.name || 'Vendedor Verificado',
-            calificacion: '5.0 ⭐',
-            miembrosDesde: '2026',
-          },
-          comentarios: [],
-        }));
-
-        setArticulosApi(mapeados);
-      } catch (error) {
-        console.error('Error conectando con la API de productos:', error);
-      } finally {
-        setCargandoProductos(false);
+        url += `?${params.toString()}`;
       }
-    };
 
-    fetchProductos();
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al obtener productos de la API');
+      }
+
+      const data = await response.json();
+
+      // Mapear los campos de PostgreSQL al formato que usan tus tarjetas y ArticuloDetailPage
+      const mapeados = data.map((prod) => ({
+        id: prod.id,
+        sellerId: prod.seller_id || prod.user_id || prod.seller?.id,
+        titulo: prod.title,
+        precio: `$${Number(prod.price).toLocaleString('es-MX')} MXN`,
+        categoria: prod.category?.name || 'General',
+        ubicacion: prod.location || 'Culiacán',
+        distanciaKm: prod.distance !== undefined ? Number(prod.distance).toFixed(1) : null,
+        descripcion: prod.description || 'Sin descripción disponible.',
+        imagenes: [
+          prod.image_data || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f'
+        ],
+        vendedor: {
+          id: prod.seller_id || prod.user_id || prod.seller?.id,
+          nombreCompleto: prod.seller?.name || 'Vendedor Verificado',
+          calificacion: '5.0 ⭐',
+          miembrosDesde: '2026',
+        },
+        comentarios: [],
+      }));
+
+      setArticulosApi(mapeados);
+    } catch (error) {
+      console.error('Error conectando con la API de productos:', error);
+    } finally {
+      setCargandoProductos(false);
+    }
+  };
+
+  // 1. Cargar productos reales desde la API de Laravel al iniciar
+  useEffect(() => {
+    fetchProductos(locationFilter, false);
   }, []);
 
-  // 2. Geolocalización
+  // 2. Detectar ciudad inicial del usuario por GPS (opcional, actualiza el nombre mostrado)
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocationError('Tu navegador no soporta geolocalización');
-      setUserLocationText('No disponible');
-      return;
-    }
+    if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -203,34 +218,39 @@ export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenF
           );
           const data = await response.json();
           const address = data.address || {};
-          const ciudad = address.city || address.town || address.village || address.municipality || 'Ubicación detectada';
-          const estado = address.state || '';
-          setUserLocationText(`${ciudad}, ${estado}`);
+          const ciudad = address.city || address.town || address.village || address.municipality;
+
+          if (ciudad) {
+            setLocationFilter((prev) => ({
+              ...prev,
+              city: ciudad,
+              coords: [lat, lng],
+            }));
+          }
         } catch (error) {
           console.error('Error al obtener el nombre de la ciudad:', error);
-          setUserLocationText(`Lat: ${lat.toFixed(2)}, Lng: ${lng.toFixed(2)}`);
         }
       },
-      (error) => {
-        console.error('Error al obtener ubicación:', error);
-        setLocationError('No se pudo obtener tu ubicación actual.');
-        setUserLocationText('Ubicación predeterminada');
+      () => {
+        // Si el usuario niega el GPS, mantiene Culiacán por defecto
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, []);
 
-  const handleManualLocationSubmit = (e) => {
-    e.preventDefault();
-    if (customCity.trim()) {
-      setUserLocationText(customCity.trim());
-      setCustomCity('');
-      setIsChangingLocation(false);
-    }
+  // Cuando el usuario hace clic en "Aplicar" dentro de LocationModal
+  const handleApplyLocation = (newLocation) => {
+    setLocationFilter(newLocation);
+    setUsarFiltroDistancia(true);
+    setPaginaActual(1);
+    fetchProductos(newLocation, true);
   };
 
   // Combinar primero los productos reales de la base de datos seguidos de los de demostración
-  const todosLosArticulos = [...articulosApi, ...ARTICULOS_DEMO];
+  // (Si ya aplicó un filtro de radio, mostramos solo los resultados filtrados de la BD)
+  const todosLosArticulos = usarFiltroDistancia
+    ? articulosApi
+    : [...articulosApi, ...ARTICULOS_DEMO];
 
   // Filtrado de artículos (con normalización de acentos)
   const articulosFiltrados = todosLosArticulos.filter((art) => {
@@ -307,29 +327,41 @@ export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenF
 
             <div className="location-box">
               <div className="location-header">
-                <span className="location-title">📍 Tu ubicación</span>
-                <button className="btn-change-location" onClick={() => setIsChangingLocation(!isChangingLocation)}>
-                  {isChangingLocation ? 'Cancelar' : 'Cambiar'}
-                </button>
+                <span className="location-title">Ubicación</span>
+                {usarFiltroDistancia && (
+                  <button
+                    type="button"
+                    className="btn-change-location"
+                    onClick={() => {
+                      setUsarFiltroDistancia(false);
+                      setPaginaActual(1);
+                      fetchProductos(locationFilter, false);
+                    }}
+                  >
+                    Ver todos
+                  </button>
+                )}
               </div>
 
-              {!isChangingLocation ? (
-                <div className={`location-text${locationError ? ' error' : ''}`}>
-                  {userLocationText}
-                </div>
-              ) : (
-                <form onSubmit={handleManualLocationSubmit} className="location-form">
-                  <input
-                    type="text"
-                    placeholder="Escribe otra ciudad..."
-                    value={customCity}
-                    onChange={(e) => setCustomCity(e.target.value)}
-                    className="location-input"
-                    autoFocus
-                  />
-                  <button type="submit" className="btn-location-submit">Ver</button>
-                </form>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsLocationModalOpen(true)}
+                style={{
+                  width: '100%',
+                  marginTop: '6px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#f8fafc',
+                  color: '#1d61e7',
+                  fontWeight: '600',
+                  fontSize: '13.5px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                📍 {locationFilter.city} · En un radio de {locationFilter.radiusKm} km
+              </button>
             </div>
 
             <input
@@ -362,7 +394,12 @@ export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenF
               {categorias.find((c) => c.id === selectedCategory)?.name || 'Artículos'}
             </h1>
             <p className="main-subheading">
-              Mostrando resultados para: <strong>{userLocationText}</strong> ({articulosFiltrados.length} disponibles)
+              Mostrando resultados para:{' '}
+              <strong>
+                {locationFilter.city}
+                {usarFiltroDistancia ? ` (radio de ${locationFilter.radiusKm} km)` : ''}
+              </strong>{' '}
+              ({articulosFiltrados.length} disponibles)
             </p>
           </div>
 
@@ -379,14 +416,17 @@ export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenF
                       <h3 className="product-title">{item.titulo}</h3>
                     </div>
                     <div>
-                      <span className="product-location">📍 Zona: {item.ubicacion}</span>
+                      <span className="product-location">
+                        📍 Zona: {item.ubicacion}
+                        {item.distanciaKm ? ` (${item.distanciaKm} km)` : ''}
+                      </span>
                       <p className="product-price">{item.precio}</p>
                     </div>
                   </div>
                 ))
               ) : (
                 <p className="no-results">
-                  No se encontraron artículos disponibles en esta categoría o búsqueda.
+                  No se encontraron artículos disponibles en esta ubicación, categoría o búsqueda.
                 </p>
               )}
             </div>
@@ -408,6 +448,14 @@ export default function ArticulosSearchPage({ onLogout, onSelectArticle, onOpenF
           )}
         </main>
       </div>
+
+      {/* Modal interactivo de ubicación y radio */}
+      <LocationModal
+        isOpen={isLocationModalOpen}
+        initialLocation={locationFilter}
+        onClose={() => setIsLocationModalOpen(false)}
+        onApply={handleApplyLocation}
+      />
     </div>
   );
 }
